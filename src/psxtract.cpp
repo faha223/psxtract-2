@@ -4,6 +4,11 @@
 
 #include "psxtract.h"
 
+#ifndef __WIN32__
+#include <sys/wait.h>
+#endif
+
+#ifdef __WIN32__
 char* exec(const char* cmd) {
     HANDLE hRead, hWrite;
     SECURITY_ATTRIBUTES saAttr;
@@ -55,6 +60,7 @@ char* exec(const char* cmd) {
 
     return output;
 }
+#endif
 
 int extract_startdat(FILE *psar, bool isMultidisc)
 {
@@ -701,57 +707,107 @@ int build_audio_at3(FILE *psar, FILE *iso_table, int base_audio_offset, unsigned
 	return track_num - 1;
 }
 
-int convert_at3_to_wav(int disc_num, int num_tracks)
+int convert_at3_to_wav_at3tool(const char *at3_filename, const char *wav_filename)
 {
-	if (num_tracks > 0)
-		printf("\nAttempting to convert from ATRAC3 to WAV, this may take awhile...\n\n");
-	for (int i = 2; i <= num_tracks + 1; i++)
+	struct stat st;
+#ifdef __WIN32
+	char wdir[_MAX_PATH];
+	char command[_MAX_PATH + 50];
+
+	if (GetModuleFileName(NULL, wdir, MAX_PATH) == 0)
 	{
-		char at3_filename[0x10];
-		audio_file_name(at3_filename, disc_num, i, "AT3");
+		printf("ERROR: Failed to obtained current directory\n%d\n", GetLastError());
+		return 1;
+	}
+
+	// Find the last backslash in the path, and null-terminate there to remove the executable name
+	char* last_backslash = strrchr(wdir, '\\');
+	if (last_backslash) {
+		*last_backslash = '\0';
+	}
+	sprintf(command, "%s\\at3tool.exe", wdir);
+	if (stat(command, &st) != 0)
+	{
+		printf("ERROR: Failed to find at3tool.exe, aborting...\n");
+		return -1;
+	}
+	sprintf(command, "%s\\msvcr71.dll", wdir);
+	if (stat(command, &st) != 0)
+	{
+		printf("ERROR: Failed to find msvcr71.dll needed by at3tool.exe, aborting...\n");
+		return -1;
+	}
+	sprintf(command, "cmd /c %s\\at3tool.exe -d \"%s\" \"%s\"", wdir, at3_filename, wav_filename);
+	printf("%s\n", command);
+	char *result = exec(command);
+	if (result) {
+		printf("%s\n", result);
+		free(result);
+	}
+#else
+	fprintf(stderr, "at3tool.exe is not a Linux utility. Aborting\n");
+	exit(0);
+#endif
+	if (stat(wav_filename, &st) != 0 || st.st_size <= 44)
+	{
+		printf("%s failed to convert, ignoring audio tracks...\n", wav_filename);
+		return -1;
+	}
+	if (stat(wav_filename, &st) == 0)
+	{
+		FILE* at3_file = fopen(at3_filename, "rb");
+		if (at3_file == NULL)
+		{
+			printf("ERROR: Can't open %s for verification, aborting...\n", at3_filename);
+			return -1;
+		}
+		AT3_HEADER at3_header[sizeof(AT3_HEADER)];
+		fread(at3_header, sizeof(AT3_HEADER), 1, at3_file);
+		printf("%s created with size %d (expected %d)...\n", wav_filename, st.st_size, 44 + at3_header->fact_param1 * 4);
+		fclose(at3_file);
+	}
+	else
+		printf("Unable to open %s for verification...\n", wav_filename);
+	printf("\n");
+}
+
+int convert_at3_to_wav_ffmpeg(const char *at3_filename, const char *wav_filename)
+{
+	int pid = fork();
+	if(pid < 0)
+		return -1;
+	else if(pid == 0) {
+		char *const args[11] = {
+			"ffmpeg",
+			"-y",
+			"-i",
+			(char*)at3_filename,
+			"-map",
+			"0",
+			"-c:a",
+			"pcm_s16le",
+			"-ar",
+			"44100",
+			(char*)wav_filename
+		};
+
+		execvp(args[0], args); // This will overwrite the existing application
+	}
+	else 
+	{
+		// This is the parent process. Wait for the child process to exit
+		int cpid = 0;
+		int error_code = 0;
+		while(cpid != pid)
+			cpid = wait(&error_code);
+
+		if(error_code != 0)
+		{
+			printf("%s failed to convert, ignoring audio tracks...\n", wav_filename);
+			return -1;
+		}
+
 		struct stat st;
-		if (stat(at3_filename, &st) != 0 || st.st_size == 0)
-		{
-			printf("%s doesn't exist or empty, aborting...\n", at3_filename);
-			return -1;
-		}
-
-		char wav_filename[0x10];
-		audio_file_name(wav_filename, disc_num, i, "WAV");
-
-		char wdir[_MAX_PATH];
-		char command[_MAX_PATH + 50];
-
-		if (GetModuleFileName(NULL, wdir, MAX_PATH) == 0)
-		{
-			printf("ERROR: Failed to obtained current directory\n%d\n", GetLastError());
-			return 1;
-		}
-
-		// Find the last backslash in the path, and null-terminate there to remove the executable name
-		char* last_backslash = strrchr(wdir, '\\');
-		if (last_backslash) {
-			*last_backslash = '\0';
-		}
-		sprintf(command, "%s\\at3tool.exe", wdir);
-		if (stat(command, &st) != 0)
-		{
-			printf("ERROR: Failed to find at3tool.exe, aborting...\n");
-			return -1;
-		}
-		sprintf(command, "%s\\msvcr71.dll", wdir);
-		if (stat(command, &st) != 0)
-		{
-			printf("ERROR: Failed to find msvcr71.dll needed by at3tool.exe, aborting...\n");
-			return -1;
-		}
-		sprintf(command, "cmd /c %s\\at3tool.exe -d \"%s\" \"%s\"", wdir, at3_filename, wav_filename);
-		printf("%s\n", command);
-		char *result = exec(command);
-        if (result) {
-            printf("%s\n", result);
-            free(result);
-        }
 		if (stat(wav_filename, &st) != 0 || st.st_size <= 44)
 		{
 			printf("%s failed to convert, ignoring audio tracks...\n", wav_filename);
@@ -773,6 +829,36 @@ int convert_at3_to_wav(int disc_num, int num_tracks)
 		else
 			printf("Unable to open %s for verification...\n", wav_filename);
 		printf("\n");
+	}
+
+	return 0;
+}
+
+int convert_at3_to_wav(int disc_num, int num_tracks)
+{
+	if (num_tracks > 0)
+		printf("\nAttempting to convert from ATRAC3 to WAV, this may take awhile...\n\n");
+	for (int i = 2; i <= num_tracks + 1; i++)
+	{
+		char at3_filename[0x10];
+		audio_file_name(at3_filename, disc_num, i, "AT3");
+		struct stat st;
+		if (stat(at3_filename, &st) != 0 || st.st_size == 0)
+		{
+			printf("%s doesn't exist or empty, aborting...\n", at3_filename);
+			return -1;
+		}
+
+		char wav_filename[0x10];
+		audio_file_name(wav_filename, disc_num, i, "WAV");
+
+		#ifdef __WIN32__
+		int result = convert_at3_to_wav_at3tool(at3_filename);
+		#else
+		int result = convert_at3_to_wav_ffmpeg(at3_filename, wav_filename);
+		#endif
+		if(result != 0)
+			return -1;
 
 	}
 	return num_tracks;
@@ -1343,7 +1429,11 @@ int decrypt_multi_disc(FILE *psar, int psar_size, int startdat_offset, unsigned 
 
 int main(int argc, char **argv)
 {
+#ifdef __WIN32__
 	SetConsoleOutputCP(CP_UTF8);
+#else
+	// TODO: Changing the Terminal to UTF_8 is a system-level thing that we shouldn't be doing here
+#endif
 	if ((argc <= 1) || (argc > 5))
 	{
 		printf("*****************************************************\n");

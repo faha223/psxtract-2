@@ -138,9 +138,8 @@ void SHAInit(SHA_CTX *shsInfo)
 
    Note that this corrupts the shsInfo->data area */
 
-static void SHSTransform( digest, data )
-     UINT4 *digest, *data ;
-    {
+static void SHSTransform(UINT4 *digest, UINT4 *data )
+{
     UINT4 A, B, C, D, E;     /* Local vars */
     UINT4 eData[ 16 ];       /* Expanded data */
 
@@ -243,7 +242,7 @@ static void SHSTransform( digest, data )
     digest[ 2 ] += C;
     digest[ 3 ] += D;
     digest[ 4 ] += E;
-    }
+}
 
 /* When run on a little-endian CPU we need to perform byte reversal on an
    array of long words. */

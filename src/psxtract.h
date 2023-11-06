@@ -5,9 +5,17 @@
 #define _CRT_SECURE_NO_WARNINGS
 
 #include <cstdint>
-#include <direct.h>
 #include <sys/stat.h>
+
+#ifdef __WIN32__
+#include <direct.h>
 #include <windows.h>
+#else
+#include <unistd.h>
+#define _rmdir(x) rmdir(x)
+#define _chdir(x) chdir(x)
+#define _mkdir(x) mkdir(x, S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH)
+#endif
 
 #include "cdrom.h"
 #include "lz.h"

@@ -28,7 +28,7 @@ u8 ec_k[21];
 
 
 
-void hex_dump(char *str, u8 *buf, int size)
+void hex_dump(const char *str, u8 *buf, int size)
 {
   int i;
 
@@ -254,7 +254,7 @@ static void generate_ecdsa(u8 *outR, u8 *outS, u8 *k, u8 *hash)
   u8 minv[21];
   struct point mG;
 
-  e[0] = 0;R[0] = 0;S[0] = 0;
+  e[0] = 0; R[0] = 0; S[0] = 0;
   memcpy(e + 1, hash, 20);
   bn_reduce(e, ec_N, 21);
 
@@ -295,8 +295,8 @@ static void generate_ecdsa(u8 *outR, u8 *outS, u8 *k, u8 *hash)
 
   bn_from_mon(R, ec_N, 21);
   bn_from_mon(S, ec_N, 21);
-  memcpy(outR,R+1,0x20);
-  memcpy(outS,S+1,0x20);
+  memcpy(outR, R+1, 0x20);
+  memcpy(outS, S+1, 0x20);
 }
 
     // Signing = 

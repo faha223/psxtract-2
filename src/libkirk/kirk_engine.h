@@ -184,7 +184,7 @@ typedef struct
       0x0C: Mul1
       0x0D: Mul2
       0x0E: Random Number Gen
-      0x0F: (absolutely no idea – could be KIRK initialization)
+      0x0F: (absolutely no idea ï¿½ could be KIRK initialization)
       0x10: Signature Gen
       // Sig Checks
       0x11: Signature Check (checks for generated sigs)
@@ -238,7 +238,7 @@ void bn_to_mon(u8 *d, u8 *N, u32 n);
 void bn_from_mon(u8 *d, u8 *N, u32 n);
 void bn_mon_mul(u8 *d, u8 *a, u8 *b, u8 *N, u32 n);
 void bn_mon_inv(u8 *d, u8 *a, u8 *N, u32 n);
-void hex_dump(char *str, u8 *buf, int size);
+void hex_dump(const char *str, u8 *buf, int size);
 
 #define		round_up(x,n)	(-(-(x) & -(n)))
 
