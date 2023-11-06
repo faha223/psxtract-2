@@ -4,3 +4,4 @@ bin/
 src/Debug/
 src/Release/
 obj/
+/src/psxtract.vcxproj.user

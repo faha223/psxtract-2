@@ -4,11 +4,11 @@
 
 #include "psxtract.h"
 
-#ifndef __WIN32__
+#ifndef _WIN32
 #include <sys/wait.h>
 #endif
 
-#ifdef __WIN32__
+#ifdef _WIN32
 char* exec(const char* cmd) {
     HANDLE hRead, hWrite;
     SECURITY_ATTRIBUTES saAttr;
@@ -710,7 +710,7 @@ int build_audio_at3(FILE *psar, FILE *iso_table, int base_audio_offset, unsigned
 int convert_at3_to_wav_at3tool(const char *at3_filename, const char *wav_filename)
 {
 	struct stat st;
-#ifdef __WIN32
+#ifdef _WIN32
 	char wdir[_MAX_PATH];
 	char command[_MAX_PATH + 50];
 
@@ -769,10 +769,12 @@ int convert_at3_to_wav_at3tool(const char *at3_filename, const char *wav_filenam
 	else
 		printf("Unable to open %s for verification...\n", wav_filename);
 	printf("\n");
+	return 0;
 }
 
 int convert_at3_to_wav_ffmpeg(const char *at3_filename, const char *wav_filename)
 {
+#ifndef _WIN32
 	int pid = fork();
 	if(pid < 0)
 		return -1;
@@ -830,6 +832,10 @@ int convert_at3_to_wav_ffmpeg(const char *at3_filename, const char *wav_filename
 			printf("Unable to open %s for verification...\n", wav_filename);
 		printf("\n");
 	}
+#else
+	fprintf(stderr, "at3tool.exe is not supported in Windows. Aborting\n");
+	exit(0);
+#endif
 
 	return 0;
 }
@@ -852,8 +858,8 @@ int convert_at3_to_wav(int disc_num, int num_tracks)
 		char wav_filename[0x10];
 		audio_file_name(wav_filename, disc_num, i, "WAV");
 
-		#ifdef __WIN32__
-		int result = convert_at3_to_wav_at3tool(at3_filename);
+		#ifdef _WIN32
+		int result = convert_at3_to_wav_at3tool(at3_filename, wav_filename);
 		#else
 		int result = convert_at3_to_wav_ffmpeg(at3_filename, wav_filename);
 		#endif
@@ -1429,7 +1435,7 @@ int decrypt_multi_disc(FILE *psar, int psar_size, int startdat_offset, unsigned 
 
 int main(int argc, char **argv)
 {
-#ifdef __WIN32__
+#ifdef _WIN32
 	SetConsoleOutputCP(CP_UTF8);
 #else
 	// TODO: Changing the Terminal to UTF_8 is a system-level thing that we shouldn't be doing here

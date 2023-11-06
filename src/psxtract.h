@@ -7,7 +7,7 @@
 #include <cstdint>
 #include <sys/stat.h>
 
-#ifdef __WIN32__
+#ifdef _WIN32
 #include <direct.h>
 #include <windows.h>
 #else
