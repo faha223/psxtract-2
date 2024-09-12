@@ -62,7 +62,7 @@ char* exec(const char* cmd) {
 }
 #endif
 
-int extract_startdat(FILE *psar, bool isMultidisc)
+unsigned long extract_startdat(FILE *psar, bool isMultidisc)
 {
 	if (psar == NULL)
 	{
@@ -71,7 +71,7 @@ int extract_startdat(FILE *psar, bool isMultidisc)
 	}
 
 	// Get the STARTDAT offset (0xC for single disc and 0x10 for multidisc due to header magic length).
-	int startdat_offset;
+	unsigned long startdat_offset;
 	if (isMultidisc)
 		fseek(psar, 0x10, SEEK_SET);
 	else
@@ -87,9 +87,9 @@ int extract_startdat(FILE *psar, bool isMultidisc)
 		memset(startdat_header, 0, sizeof(STARTDAT_HEADER));
 
 		// Save the header as well.
-		fseek(psar, startdat_offset, SEEK_SET);
+		_fseeki64(psar, startdat_offset, SEEK_SET);
 		fread(startdat_header, sizeof(STARTDAT_HEADER), 1, psar);
-		fseek(psar, startdat_offset, SEEK_SET);
+		_fseeki64(psar, startdat_offset, SEEK_SET);
 
 		// Read the STARTDAT data.
 		int startdat_size = startdat_header->header_size + startdat_header->data_size;
@@ -162,7 +162,7 @@ int decrypt_document(FILE* document)
 	return 0;
 }
 
-int decrypt_special_data(FILE *psar, int psar_size, int special_data_offset)
+int decrypt_special_data(FILE *psar, long long psar_size, int special_data_offset)
 {
 	if ((psar == NULL))
 	{
@@ -179,7 +179,7 @@ int decrypt_special_data(FILE *psar, int psar_size, int special_data_offset)
 
 		// Read the data.
 		int special_data_size = psar_size - special_data_offset;  // Always the last portion of the DATA.PSAR.
-		unsigned char *special_data = new unsigned char[special_data_size];
+		unsigned char *special_data = new unsigned char[static_cast<unsigned int>(special_data_size)];
 		fread(special_data, special_data_size, 1, psar);
 
 		printf("Decrypting special data...\n");
@@ -253,7 +253,7 @@ int decrypt_unknown_data(FILE *psar, int unknown_data_offset, int startdat_offse
 	return 0;
 }
 
-int decrypt_iso_header(FILE *psar, int header_offset, unsigned char *pgd_key, int disc_num)
+int decrypt_iso_header(FILE *psar, unsigned int header_offset, unsigned char *pgd_key, int disc_num)
 {
 	if (psar == NULL)
 	{
@@ -262,7 +262,7 @@ int decrypt_iso_header(FILE *psar, int header_offset, unsigned char *pgd_key, in
 	}
 
 	// Seek to the ISO header.
-	fseek(psar, header_offset, SEEK_SET);
+	_fseeki64(psar, header_offset, SEEK_SET);
 
 	// Read the ISO header.
 	unsigned char *iso_header = new unsigned char[ISO_HEADER_SIZE];
@@ -335,7 +335,7 @@ int decrypt_iso_map(FILE *psar, int map_offset, int map_size, unsigned char *pgd
 	return 0;
 }
 
-int build_data_track(FILE *psar, FILE *iso_table, int disc_offset, int disc_num)
+int build_data_track(FILE *psar, FILE *iso_table, unsigned int disc_offset, int disc_num)
 {
 	if ((psar == NULL) || (iso_table == NULL))
 	{
@@ -370,7 +370,7 @@ int build_data_track(FILE *psar, FILE *iso_table, int disc_offset, int disc_num)
 		return -1;
 	}
 
-	int iso_offset = ISO_BASE_OFFSET + disc_offset;  // Start of compressed ISO data.
+	long long iso_offset = ISO_BASE_OFFSET + disc_offset;  // Start of compressed ISO data.
 	printf("ISO offset %x\n", iso_offset);
 	int read_size = 0;
 	int block_count = 0;
@@ -386,7 +386,7 @@ int build_data_track(FILE *psar, FILE *iso_table, int disc_offset, int disc_num)
 		read_size += entry->size;
 		if (block_count % 100 == 0) printf(".");
 		// Locate the block offset in the DATA.PSAR.
-		fseek(psar, iso_offset + entry->offset, SEEK_SET);
+		_fseeki64(psar, iso_offset + entry->offset, SEEK_SET);
 		fread(iso_block_comp, entry->size, 1, psar);
 
 		// Decompress if necessary.
@@ -1205,7 +1205,7 @@ const PREGAP_OVERRIDE* find_pregap_mapping(char* game_id)
     return NULL;
 }
 
-int decrypt_single_disc(FILE* psar, int psar_size, int startdat_offset, unsigned char* pgd_key)
+int decrypt_single_disc(FILE* psar, long long psar_size, long long startdat_offset, unsigned char* pgd_key)
 {
 	// Decrypt the ISO header and get the block table.
 	// NOTE: In a single disc, the ISO header is located at offset 0x400 and has a length of 0xB6600.
@@ -1304,7 +1304,7 @@ int decrypt_single_disc(FILE* psar, int psar_size, int startdat_offset, unsigned
 	return 0;
 }
 
-int decrypt_multi_disc(FILE *psar, int psar_size, int startdat_offset, unsigned char *pgd_key)
+int decrypt_multi_disc(FILE *psar, long long psar_size, long long startdat_offset, unsigned char *pgd_key)
 {
 	// Decrypt the multidisc ISO map header and get the disc map.
 	// NOTE: The ISO map header is located at offset 0x200 and 
@@ -1329,7 +1329,7 @@ int decrypt_multi_disc(FILE *psar, int psar_size, int startdat_offset, unsigned 
 	// - The final data block contains the disc title, NULL padding and some unknown integers.
 
 	// Get the discs' offsets.
-	int disc_offset[5];
+	unsigned int disc_offset[5];
 	for (int i = 0; i < 5; i++)
 		fread(&disc_offset[i], sizeof(int), 1, iso_map);
 
@@ -1529,9 +1529,9 @@ int main(int argc, char **argv)
 	}
 
 	// Get DATA.PSAR size.
-	fseek(psar, 0, SEEK_END);
-	long psar_size = ftell(psar);
-	fseek(psar, 0, SEEK_SET);
+	_fseeki64(psar, 0, SEEK_END);
+	const long long psar_size = _ftelli64(psar);
+	_fseeki64(psar, 0, SEEK_SET);
 
 	// Check PSISOIMG0000 or PSTITLEIMG0000 magic.
 	// NOTE: If the file represents a single disc, then PSISOIMG0000 is used.
@@ -1562,7 +1562,7 @@ int main(int argc, char **argv)
 
 	// Extract the STARTDAT sector.
 	// NOTE: STARTDAT data is normally a PNG file with an intro screen of the game.
-	int startdat_offset = extract_startdat(psar, isMultidisc);
+	const unsigned long startdat_offset = extract_startdat(psar, isMultidisc);
 
 	// Decrypt the disc(s).
 	if (isMultidisc)
